@@ -1,6 +1,8 @@
-fastapi[all]
-supabase
-python-dotenv
-# google-generativeai
-gTTS
-google-genai
+fastapi==0.115.0
+uvicorn[standard]==0.32.0
+python-dotenv==1.0.1
+openai==1.54.3
+pydantic==2.9.2
+
+# Optional: Only if you want conversation history
+supabase==2.9.0

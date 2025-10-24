@@ -41,7 +41,7 @@ A Next.js + Three.js app that renders a VRM avatar, chats with a Gemini-based ba
 │  └─ static/audio/            # Generated TTS audio (.wav)
 └─ next.config.ts, tsconfig.json, eslint.config.mjs, package.json
 ```
-
+aaaa
 ### What it does
 - Renders a VRM avatar with environment lighting, bloom, and camera controls via Leva.
 - Retargets Mixamo FBX animations to VRM bones (idle, thinking, dancing, etc.).
