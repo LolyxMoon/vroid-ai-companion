@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Vroid AI Companion",
+  title: "NYX PolyMarket Agent",
   description:
     "Vroid avatar, chats with a Gemini-based backend, and performs audio-driven lip sync with blendshapes and Mixamo-retargeted animations.",
 };
