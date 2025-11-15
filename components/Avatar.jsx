@@ -110,10 +110,6 @@ export default function Avatar({
     });
   }, [scene]);
 
-  // const setResultsCallback = useVideoRecognition(
-  //   (state) => state.setResultsCallback
-  // );
-  // const videoElement = useVideoRecognition((state) => state.videoElement);
   const riggedFace = useRef();
   const riggedPose = useRef();
   const riggedLeftHand = useRef();
@@ -226,45 +222,11 @@ export default function Avatar({
     });
   };
 
-  const rotateBone = (
-    boneName,
-    value,
-    slerpFactor,
-    flip = {
-      x: 1,
-      y: 1,
-      z: 1,
-    }
-  ) => {
-    const bone = userData.vrm.humanoid.getNormalizedBoneNode(boneName);
-    if (!bone) {
-      console.warn(
-        `Bone ${boneName} not found in VRM humanoid. Check the bone name.`
-      );
-      console.log("userData.vrm.humanoid.bones", userData.vrm.humanoid);
-      return;
-    }
-
-    tmpEuler.set(value.x * flip.x, value.y * flip.y, value.z * flip.z);
-    tmpQuat.setFromEuler(tmpEuler);
-    bone.quaternion.slerp(tmpQuat, slerpFactor);
-  };
-
-  const animateShy = () => {
-    console.log("clicked");
-  };
-
   const animateKiss = () => {
-    // userData.vrm.expressionManager.setValue("happy", 0.3);
-    // userData.vrm.expressionManager.setValue("blinkLeft", 1);
-    // userData.vrm.expressionManager.setValue("blinkRight", 1);
     actions["Idle"]?.stop();
     actions["Kiss"]?.play();
     setIsKissing(true);
     setTimeout(() => {
-      // userData.vrm.expressionManager.setValue("happy", 0);
-      // userData.vrm.expressionManager.setValue("blinkLeft", 0);
-      // userData.vrm.expressionManager.setValue("blinkRight", 0);
       actions["Kiss"]?.stop();
       actions["Idle"]?.play();
       setIsKissing(false);
@@ -281,8 +243,6 @@ export default function Avatar({
         ?.removeEventListener("click", animateKiss);
     };
   }, []);
-
-  const audioTime = useRef(0);
 
   useFrame((_, delta) => {
     if (!userData?.vrm) {
@@ -322,7 +282,8 @@ export default function Avatar({
       <primitive
         object={scene}
         rotation-y={
-          AVATAR_LIST_FLIP?.includes(avatar?.split(".")[0]) ? Math.PI : 0
+          // INVERTIDO: Ahora los avatares en la lista NO rotan, los demás SÍ
+          AVATAR_LIST_FLIP?.includes(avatar?.split(".")[0]) ? 0 : Math.PI
         }
       />
     </group>
