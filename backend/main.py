@@ -8,9 +8,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from dotenv import load_dotenv
 
-import base64
 import mimetypes
-import re
 import struct
 from google import genai
 from google.genai import types
@@ -27,11 +25,13 @@ client = genai.Client(
 # --- 2. Initialize FastAPI App ---
 app = FastAPI()
 
+# CORS - Allow your Vercel domain and localhost
 origins = [
     "http://localhost:3000",
     "http://localhost:3001",
-    # Add your deployed domain here
-    # "https://your-app.vercel.app",
+    "http://localhost:8080",
+    "https://*.vercel.app",  # All Vercel subdomains
+    "*",  # Allow all origins (you can restrict this later)
 ]
 
 app.add_middleware(
@@ -48,8 +48,7 @@ os.makedirs("static/audio", exist_ok=True)
 # Mount static directory
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
-# --- IN-MEMORY STORAGE (replaces Supabase) ---
-# This will reset when server restarts
+# --- IN-MEMORY STORAGE (no database needed) ---
 conversation_memory = {}  # {session_id: [messages]}
 
 # --- 3. Define Models ---
@@ -260,7 +259,7 @@ async def get_conversations(
         result.append(
             Conversation(
                 id=idx,
-                created_at="2024-01-01T00:00:00Z",  # Placeholder
+                created_at="2024-01-01T00:00:00Z",
                 user_id=session_id,
                 role=msg["role"],
                 content=msg["content"]
@@ -324,5 +323,6 @@ async def chat(request: ChatRequest, http_request: Request):
 def read_root():
     return {
         "message": "VRoid AI Companion Backend is running! 🚀",
-        "note": "Running without database - conversations are stored in memory only"
+        "note": "Running without database - conversations stored in memory",
+        "railway_url": "falopita-production.up.railway.app"
     }
