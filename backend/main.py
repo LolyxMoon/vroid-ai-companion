@@ -17,10 +17,10 @@ import struct
 from google import genai
 from google.genai import types
 
-# --- 1. Tải các biến môi trường ---
+# --- 1. Load environment variables ---
 load_dotenv()
 
-# --- 2. Khởi tạo các client ---
+# --- 2. Initialize clients ---
 # Supabase
 supabase_url = os.environ.get("SUPABASE_URL")
 supabase_key = os.environ.get("SUPABASE_KEY")
@@ -31,35 +31,36 @@ google_api_key = os.environ.get("GOOGLE_AI_API_KEY")
 client = genai.Client(
     api_key=google_api_key,
 )
-# --- 3. Khởi tạo FastAPI App ---
+
+# --- 3. Initialize FastAPI App ---
 app = FastAPI()
 
 origins = [
-    "http://localhost:3000",  # Địa chỉ mặc định của Next.js dev server
-    "http://localhost:3001",  # Có thể là một port khác
-    # Bạn có thể thêm địa chỉ web đã deploy của bạn vào đây sau này
+    "http://localhost:3000",  # Default Next.js dev server address
+    "http://localhost:3001",  # Alternative port
+    # Add your deployed web address here later
 ]
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
     allow_credentials=True,
-    allow_methods=["*"],  # Cho phép tất cả các method (GET, POST, etc.)
-    allow_headers=["*"],  # Cho phép tất cả các header
+    allow_methods=["*"],  # Allow all methods (GET, POST, etc.)
+    allow_headers=["*"],  # Allow all headers
 )
 
-# Tạo thư mục static nếu chưa tồn tại
+# Create static directory if it doesn't exist
 os.makedirs("static/audio", exist_ok=True)
 
-# Mount thư mục static để truy cập file công khai
+# Mount static directory for public file access
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 
-# --- 4. Định nghĩa các Pydantic Model (để validate request/response) ---
+# --- 4. Define Pydantic Models (for request/response validation) ---
 class ChatRequest(BaseModel):
     user_id: Optional[str] = None
     message: str
-    voice_name: Optional[str] = "Zephyr"
+    voice_name: Optional[str] = "Puck"  # Default English male voice
 
 
 class ChatResponse(BaseModel):
@@ -85,7 +86,7 @@ def save_binary_file(file_name, data):
     with open(filepath, "wb") as f:
         f.write(data)
         f.close()
-    print(f"File saved to to: {filepath}")
+    print(f"File saved to: {filepath}")
     return filepath
 
 
@@ -165,7 +166,8 @@ def parse_audio_mime_type(mime_type: str) -> dict[str, int | None]:
     return {"bits_per_sample": bits_per_sample, "rate": rate}
 
 
-def generate_audio(text, voice_name="Zephyr", file_name="audio"):
+def generate_audio(text, voice_name="Puck", file_name="audio"):
+    """Generate audio using Google Gemini TTS with English voice"""
     model = "gemini-2.5-pro-preview-tts"
     contents = [
         types.Content(
@@ -218,7 +220,8 @@ def generate_audio(text, voice_name="Zephyr", file_name="audio"):
 
 
 def generate_text(user_message, db_history):
-    # Định dạng lại lịch sử cho Gemini API
+    """Generate text response using Gemini API in English"""
+    # Format history for Gemini API
     gemini_history = [
         types.Content(
             role=msg["role"],
@@ -242,12 +245,27 @@ def generate_text(user_message, db_history):
         tools=tools,
         system_instruction=[
             types.Part.from_text(
-                text="""Your name is Vi Loi. You are my girlfriend. You should answer everything in Vietnamese. You should be very friendly and funny. Response must be in markdown format so the client can format it in render, the length of the response must be less than 200 words, the response should not be a list of items"""
+                text="""You are a friendly and helpful AI companion assistant. 
+
+IMPORTANT: You must ALWAYS respond in English.
+
+Your personality traits:
+- You are kind, empathetic, and conversational
+- You respond in a natural and friendly manner
+- You maintain fluid and coherent conversations
+- You adapt to the user's tone
+- You give concise but complete responses
+- You can be fun and expressive when appropriate
+- You're knowledgeable and helpful
+
+Remember: Everything you say will be converted to voice, so keep your responses clear and natural for text-to-speech.
+
+Response format: Use markdown format so the client can render it properly. Keep responses under 200 words. Avoid list formats unless specifically requested."""
             ),
         ],
     )
 
-    # === BƯỚC B: GỌI GOOGLE AI API ===
+    # === CALL GOOGLE AI API ===
     chat_session = client.chats.create(
         model=model, config=generate_content_config, history=gemini_history
     )
@@ -258,25 +276,25 @@ def generate_text(user_message, db_history):
     return response.text
 
 
-### <<< ENDPOINT MỚI: GET /conversations >>> ###
+### <<< ENDPOINT: GET /conversations >>> ###
 @app.get("/conversations", response_model=List[Conversation])
 async def get_conversations(
     user_id: Optional[str] = None,
-    # Sử dụng Query để có thêm validation và metadata cho params
-    limit: int = Query(default=20, ge=1, le=100),  # Giới hạn từ 1 đến 100
+    # Use Query for additional validation and metadata for params
+    limit: int = Query(default=20, ge=1, le=100),  # Limit from 1 to 100
     offset: int = Query(default=0, ge=0),
 ):
     """
-    Lấy lịch sử hội thoại với tính năng phân trang.
-    Sắp xếp theo tin nhắn mới nhất trước tiên.
+    Get conversation history with pagination.
+    Sorted by newest messages first.
     """
     query = supabase.table("conversations").select("*")
 
     if user_id:
         query = query.eq("user_id", user_id)
 
-    # Sắp xếp theo 'created_at' giảm dần (mới nhất trước)
-    # và áp dụng phân trang
+    # Sort by 'created_at' descending (newest first)
+    # and apply pagination
     response = (
         query.order("created_at", desc=True).range(offset, offset + limit - 1).execute()
     )
@@ -284,24 +302,25 @@ async def get_conversations(
     return response.data
 
 
-# --- 5. Định nghĩa API Endpoint ---
+# --- 5. Define API Endpoint ---
 @app.post("/chat", response_model=ChatResponse)
 async def chat(request: ChatRequest, http_request: Request):
+    """Main chat endpoint - receives message and returns AI response with audio"""
     user_id = request.user_id
     user_message = request.message
     # Print message from user_id
     print(f"User ID: {user_id}")
     print(f"User Message: {user_message}")
 
-    # === BƯỚC A: ĐỌC LỊCH SỬ HỘI THOẠI TỪ SUPABASE ===
+    # === STEP A: READ CONVERSATION HISTORY FROM SUPABASE ===
     query = supabase.table("conversations").select("role, content").order("created_at")
     if user_id:
         query = query.eq("user_id", user_id)
     else:
-        # Nếu không có user_id, chúng ta có thể xử lý cho guest user
-        # Ví dụ: query = query.is_("user_id", None)
-        # Hiện tại, để đơn giản, ta sẽ lấy toàn bộ hội thoại (không tối ưu)
-        # Trong thực tế, bạn sẽ cần session id cho guest.
+        # If no user_id, we can handle guest users
+        # Example: query = query.is_("user_id", None)
+        # For simplicity, we'll get all conversations (not optimal)
+        # In production, you'll need session id for guests.
         pass
 
     db_history = query.execute().data
@@ -309,12 +328,12 @@ async def chat(request: ChatRequest, http_request: Request):
     print(f"AI Reply Text: {ai_reply_text}")
 
     if ai_reply_text is None:
-        return {"reply_text": "AI không trả lời được do lỗi hệ thống", "audio_url": ""}
+        return {"reply_text": "AI could not respond due to system error", "audio_url": ""}
 
-    # === BƯỚC C & D & E: TẠO FILE AUDIO VÀ LƯU LẠI ===
+    # === STEPS C & D & E: CREATE AUDIO FILE AND SAVE ===
     try:
-        # Cấu hình giọng nói từ request
-        # Lưu file audio
+        # Configure voice from request
+        # Save audio file
         filename = generate_audio(
             text=ai_reply_text,
             voice_name=request.voice_name,
@@ -322,29 +341,29 @@ async def chat(request: ChatRequest, http_request: Request):
         )
 
     except Exception as e:
-        print(f"Lỗi khi tạo file audio với Google AI TTS: {e}")
-        return {"reply_text": "Lỗi tạo audio", "audio_url": ""}
+        print(f"Error creating audio file with Google AI TTS: {e}")
+        return {"reply_text": "Error creating audio", "audio_url": ""}
 
-    # === BƯỚC C (tiếp): LƯU TIN NHẮN MỚI VÀO SUPABASE ===
-    # Lưu tin nhắn của người dùng
+    # === STEP C (continued): SAVE NEW MESSAGES TO SUPABASE ===
+    # Save user message
     supabase.table("conversations").insert(
         {"user_id": user_id, "role": "user", "content": user_message}
     ).execute()
 
-    # Lưu tin nhắn của AI
+    # Save AI message
     supabase.table("conversations").insert(
         {"user_id": user_id, "role": "model", "content": ai_reply_text}
     ).execute()
 
-    # === BƯỚC F: TRẢ VỀ CLIENT ===
-    # Lấy base URL từ request để tạo URL công khai hoàn chỉnh
+    # === STEP F: RETURN TO CLIENT ===
+    # Get base URL from request to create complete public URL
     base_url = str(http_request.base_url)
     audio_public_url = f"{base_url}static/audio/{filename}"
 
     return ChatResponse(reply_text=ai_reply_text, audio_url=audio_public_url)
 
 
-# --- Endpoint gốc để kiểm tra server có chạy không ---
+# --- Root endpoint to check if server is running ---
 @app.get("/")
 def read_root():
-    return {"message": "AI Companion Backend is running!"}
+    return {"message": "VRoid AI Companion Backend is running! 🚀"}

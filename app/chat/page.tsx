@@ -17,7 +17,7 @@ export default function TestPage() {
   const [isThinking, setIsThinking] = useState(false);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
 
-  // App component giờ là nguồn dữ liệu duy nhất cho lịch sử chat
+  // App component is the single source of truth for chat history
   const [chatHistory, setChatHistory] = useState<Message[]>([]);
 
   const { avatar, voice } = useControls("VRM", {
@@ -26,7 +26,7 @@ export default function TestPage() {
       options: AVATAR_LIST,
     },
     voice: {
-      value: "Zephyr",
+      value: "Puck", // English male voice by default
       options: GOOGLE_VOICE_LIST?.map((voice) => voice.voice_name),
     },
   });
@@ -36,7 +36,7 @@ export default function TestPage() {
       try {
         const response = await fetch(`${BACKEND_URL}/conversations?limit=10`);
         const data = await response.json();
-        // Backend trả về mới nhất trước, ta cần đảo ngược lại để hiển thị đúng thứ tự
+        // Backend returns newest first, we need to reverse to display in correct order
         const formattedHistory: Message[] = data
           .map((item: Conversation) => ({
             id: item?.id || crypto.randomUUID(),
@@ -46,13 +46,13 @@ export default function TestPage() {
           .reverse();
         setChatHistory(formattedHistory);
       } catch (error) {
-        console.error("Lỗi khi tải lịch sử chat:", error);
+        console.error("Error loading chat history:", error);
       }
     };
     fetchHistory();
   }, []);
 
-  // ### <<< THAY ĐỔI MỚI: KẾT NỐI VỚI BACKEND /chat >>> ###
+  // ### <<< NEW CHANGE: CONNECT TO BACKEND /chat >>> ###
   const handleNewMessageFromChat = async (userInput: string) => {
     setIsThinking(true);
     const userMessage: Message = {
@@ -60,7 +60,7 @@ export default function TestPage() {
       role: "user",
       parts: [{ text: userInput }],
     };
-    // Cập nhật UI ngay lập tức với tin nhắn của người dùng
+    // Update UI immediately with user message
     setChatHistory((prev) => [...prev, userMessage]);
 
     try {
@@ -90,12 +90,12 @@ export default function TestPage() {
       setChatHistory((prev) => [...prev, aiMessage]);
       setAudioUrl(audio_url);
     } catch (error) {
-      console.error("Lỗi khi gọi API chat:", error);
+      console.error("Error calling chat API:", error);
       const errorMessage: Message = {
         id: crypto.randomUUID(),
         role: "model",
         parts: [
-          { text: "Xin lỗi, tôi gặp sự cố khi kết nối. Vui lòng thử lại." },
+          { text: "Sorry, I encountered an error while connecting. Please try again." },
         ],
       };
       setChatHistory((prev) => [...prev, errorMessage]);

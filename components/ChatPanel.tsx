@@ -73,7 +73,7 @@ const ChatPanel = ({
           type="text"
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          placeholder="Nhập tin nhắn..."
+          placeholder="Type your message..."
           className="flex-1 bg-gray-800 border border-gray-700 rounded-full py-2 px-4 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
         <button
