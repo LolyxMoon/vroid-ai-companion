@@ -18,28 +18,26 @@ load_dotenv()
 
 # Google AI
 google_api_key = os.environ.get("GOOGLE_AI_API_KEY")
-client = genai.Client(
-    api_key=google_api_key,
-)
+if not google_api_key:
+    print("WARNING: GOOGLE_AI_API_KEY not set!")
+    
+client = genai.Client(api_key=google_api_key) if google_api_key else None
 
 # --- 2. Initialize FastAPI App ---
-app = FastAPI()
+app = FastAPI(
+    title="VRoid AI Companion API",
+    description="Backend for VRoid AI Companion with Gemini",
+    version="1.0.0"
+)
 
-# CORS - Allow your Vercel domain and localhost
-origins = [
-    "http://localhost:3000",
-    "http://localhost:3001",
-    "http://localhost:8080",
-    "https://*.vercel.app",  # All Vercel subdomains
-    "*",  # Allow all origins (you can restrict this later)
-]
-
+# --- CRITICAL: Configure CORS BEFORE other middleware ---
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=["*"],  # Allow all origins
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["*"],  # Allow all methods (GET, POST, PUT, DELETE, etc.)
+    allow_headers=["*"],  # Allow all headers
+    expose_headers=["*"],
 )
 
 # Create static directory if it doesn't exist
@@ -48,7 +46,7 @@ os.makedirs("static/audio", exist_ok=True)
 # Mount static directory
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
-# --- IN-MEMORY STORAGE (no database needed) ---
+# --- IN-MEMORY STORAGE ---
 conversation_memory = {}  # {session_id: [messages]}
 
 # --- 3. Define Models ---
@@ -138,6 +136,9 @@ def parse_audio_mime_type(mime_type: str) -> dict[str, int | None]:
 
 def generate_audio(text, voice_name="Puck", file_name="audio"):
     """Generate audio using Google Gemini TTS"""
+    if not client:
+        raise Exception("Google AI client not initialized")
+        
     model = "gemini-2.5-pro-preview-tts"
     contents = [
         types.Content(
@@ -184,6 +185,9 @@ def generate_audio(text, voice_name="Puck", file_name="audio"):
 
 def generate_text(user_message, history):
     """Generate text response using Gemini API"""
+    if not client:
+        raise Exception("Google AI client not initialized")
+        
     gemini_history = [
         types.Content(
             role=msg["role"],
@@ -232,6 +236,31 @@ Response format: Use markdown format. Keep responses under 200 words. Avoid list
 
 ### --- ENDPOINTS --- ###
 
+@app.get("/")
+def read_root():
+    """Health check endpoint"""
+    return {
+        "status": "running",
+        "message": "VRoid AI Companion Backend is running! 🚀",
+        "version": "1.0.0",
+        "endpoints": {
+            "health": "/",
+            "conversations": "/conversations",
+            "chat": "/chat (POST)",
+            "docs": "/docs"
+        }
+    }
+
+
+@app.get("/health")
+def health_check():
+    """Health check for Railway"""
+    return {
+        "status": "healthy",
+        "google_ai_configured": client is not None
+    }
+
+
 @app.get("/conversations", response_model=List[Conversation])
 async def get_conversations(
     user_id: Optional[str] = None,
@@ -271,13 +300,20 @@ async def get_conversations(
 
 @app.post("/chat", response_model=ChatResponse)
 async def chat(request: ChatRequest, http_request: Request):
-    """Main chat endpoint"""
+    """Main chat endpoint - receives message and returns AI response with audio"""
     user_id = request.user_id
     session_id = user_id or "default"
     user_message = request.message
     
     print(f"Session ID: {session_id}")
     print(f"User Message: {user_message}")
+
+    # Check if Google AI is configured
+    if not client:
+        return ChatResponse(
+            reply_text="Sorry, the AI service is not configured. Please contact the administrator.",
+            audio_url=""
+        )
 
     # Initialize session if doesn't exist
     if session_id not in conversation_memory:
@@ -287,11 +323,21 @@ async def chat(request: ChatRequest, http_request: Request):
     history = conversation_memory[session_id]
     
     # Generate AI response
-    ai_reply_text = generate_text(user_message, history)
-    print(f"AI Reply Text: {ai_reply_text}")
+    try:
+        ai_reply_text = generate_text(user_message, history)
+        print(f"AI Reply Text: {ai_reply_text}")
+    except Exception as e:
+        print(f"Error generating text: {e}")
+        return ChatResponse(
+            reply_text="Sorry, I encountered an error generating a response.",
+            audio_url=""
+        )
 
     if ai_reply_text is None:
-        return {"reply_text": "AI could not respond due to system error", "audio_url": ""}
+        return ChatResponse(
+            reply_text="AI could not respond due to system error",
+            audio_url=""
+        )
 
     # Generate audio
     try:
@@ -302,7 +348,8 @@ async def chat(request: ChatRequest, http_request: Request):
         )
     except Exception as e:
         print(f"Error creating audio file: {e}")
-        return {"reply_text": "Error creating audio", "audio_url": ""}
+        # Still return text even if audio fails
+        filename = None
 
     # Save to memory
     conversation_memory[session_id].append(
@@ -313,16 +360,13 @@ async def chat(request: ChatRequest, http_request: Request):
     )
 
     # Return response
-    base_url = str(http_request.base_url)
-    audio_public_url = f"{base_url}static/audio/{filename}"
+    base_url = str(http_request.base_url).rstrip('/')
+    audio_public_url = f"{base_url}/static/audio/{filename}" if filename else ""
 
     return ChatResponse(reply_text=ai_reply_text, audio_url=audio_public_url)
 
 
-@app.get("/")
-def read_root():
-    return {
-        "message": "VRoid AI Companion Backend is running! 🚀",
-        "note": "Running without database - conversations stored in memory",
-        "railway_url": "falopita-production.up.railway.app"
-    }
+# Add OPTIONS handler for CORS preflight
+@app.options("/{rest_of_path:path}")
+async def preflight_handler(rest_of_path: str):
+    return {"message": "OK"}
