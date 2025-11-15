@@ -1,6 +1,5 @@
-fastapi[all]
-supabase
+fastapi
+uvicorn[standard]
 python-dotenv
-# google-generativeai
-gTTS
-google-genai
+google-generativeai
+pydantic
