@@ -25,7 +25,7 @@ client = genai.Client(api_key=google_api_key) if google_api_key else None
 
 # --- 2. Initialize FastAPI App ---
 app = FastAPI(
-    title="VRoid AI Companion API",
+    title="NIX PolyMarket Agent",
     description="Backend for VRoid AI Companion with Gemini",
     version="1.0.0"
 )
