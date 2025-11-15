@@ -202,7 +202,7 @@ def generate_text(user_message, history):
         top_p=0.9,
         max_output_tokens=200,
         thinking_config=types.ThinkingConfig(thinking_budget=8192),
-        tools=tools,
+        
         system_instruction=[
             types.Part.from_text(
                 text="""You are a friendly and helpful AI companion assistant. 
